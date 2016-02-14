@@ -16,31 +16,39 @@ type Action struct {
 	Image   string
 }
 
-var Actions = []Action{{"ping", "hello-world"}}
+var Actions = []Action{{"hello", "dlapiduz/pixie-hello"}}
+
+var logger *log.Logger
 
 func main() {
 	client, _ := docker.NewClientFromEnv()
+
+	var f *os.File
+	logger, f, _ = NewLogger()
+	defer f.Close()
 
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter text: ")
 		text, _ := reader.ReadString('\n')
 
-		if img := CheckText(text); img != "" {
-			log.Printf("Running")
-			out, err := RunContainer(client, img)
-			if err != nil {
-				panic(err)
-			}
+		if img := RunFilter(text); img != "" {
+			logger.Printf("Running")
+			go func() {
+				out, err := RunContainer(client, img)
+				if err != nil {
+					panic(err)
+				}
 
-			fmt.Println(out)
+				fmt.Println(out)
+			}()
 
 		}
 
 	}
 }
 
-func CheckText(text string) string {
+func RunFilter(text string) string {
 	for _, a := range Actions {
 		rp, err := regexp.Compile(a.Trigger)
 		if err != nil {
@@ -74,14 +82,14 @@ func RunContainer(c *docker.Client, img string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Println("Data Container ID: " + cont.ID)
+	logger.Println("Data Container ID: " + cont.ID)
 
 	attached := make(chan struct{})
 
 	buf := new(bytes.Buffer)
 
 	go func() {
-		log.Printf("AttachToContainer")
+		logger.Printf("AttachToContainer")
 		err = c.AttachToContainer(docker.AttachToContainerOptions{
 			Container:    cont.ID,
 			OutputStream: buf,
@@ -102,7 +110,7 @@ func RunContainer(c *docker.Client, img string) (string, error) {
 		return "", err
 	}
 
-	log.Println("Waiting for to exit so we can remove the container\n", cont.ID)
+	logger.Println("Waiting for to exit so we can remove the container\n", cont.ID)
 	if _, err := c.WaitContainer(cont.ID); err != nil {
 		return "", err
 	}
@@ -111,7 +119,7 @@ func RunContainer(c *docker.Client, img string) (string, error) {
 		ID: cont.ID,
 	}
 
-	log.Println("Removing container", cont.ID)
+	logger.Println("Removing container", cont.ID)
 	if err := c.RemoveContainer(removeOpts); err != nil {
 		return "", err
 	}
