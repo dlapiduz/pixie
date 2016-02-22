@@ -1,0 +1,9 @@
+version: '2'
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: docker
+      POSTGRES_USER: docker
+    ports:
+      - "5432:5432"
