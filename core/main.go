@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 
+	c "github.com/dlapiduz/pixie/common"
 	"github.com/fsouza/go-dockerclient"
 )
 
@@ -21,6 +22,9 @@ var Actions = []Action{{"hello", "dlapiduz/pixie-hello"}}
 var logger *log.Logger
 
 func main() {
+	db, _ := c.LoadDB()
+	db.DB().Ping()
+
 	client, _ := docker.NewClientFromEnv()
 
 	var f *os.File
