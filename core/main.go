@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
+	"strings"
 
 	c "github.com/dlapiduz/pixie/common"
 	"github.com/fsouza/go-dockerclient"
+	"github.com/jinzhu/gorm"
 )
 
 type Action struct {
@@ -23,6 +24,7 @@ var logger *log.Logger
 
 func main() {
 	db, _ := c.LoadDB()
+	db.LogMode(false)
 	db.DB().Ping()
 
 	client, _ := docker.NewClientFromEnv()
@@ -35,11 +37,12 @@ func main() {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print("Enter text: ")
 		text, _ := reader.ReadString('\n')
+		text = strings.TrimSpace(text)
 
-		if img := RunFilter(text); img != "" {
+		if action := RunFilter(db, text); action.ID > 0 {
 			logger.Printf("Running")
 			go func() {
-				out, err := RunContainer(client, img)
+				out, err := RunContainer(client, action.Image)
 				if err != nil {
 					panic(err)
 				}
@@ -52,18 +55,16 @@ func main() {
 	}
 }
 
-func RunFilter(text string) string {
-	for _, a := range Actions {
-		rp, err := regexp.Compile(a.Trigger)
-		if err != nil {
-			panic("compile error")
-		}
-
-		if rp.MatchString(text) {
-			return a.Image
-		}
+func RunFilter(db *gorm.DB, text string) c.Action {
+	var action c.Action
+	if text == "" {
+		return action
 	}
-	return ""
+
+	db.Where("? ~ trigger", text).First(&action)
+	logger.Println(action)
+
+	return action
 }
 
 func RunContainer(c *docker.Client, img string) (string, error) {
