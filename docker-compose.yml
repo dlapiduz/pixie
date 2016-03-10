@@ -7,3 +7,8 @@ services:
       POSTGRES_USER: docker
     ports:
       - "5432:5432"
+  nats:
+    image: nats
+    ports:
+      - "4222:4222"
+      - "8333:8333"
