@@ -19,5 +19,5 @@ func LoadDB() (*gorm.DB, error) {
 
 	log.Println("Connected to DB...")
 	db.AutoMigrate(&Action{})
-	return &db, nil
+	return db, nil
 }
