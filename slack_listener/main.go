@@ -9,10 +9,12 @@ import (
 
 func main() {
 	api := slack.New(os.Getenv("SLACK_API"))
-	api.SetDebug(true)
+	// api.SetDebug(true)
 
 	rtm := api.NewRTM()
 	go rtm.ManageConnection()
+
+	var botMeta *slack.UserDetails
 
 Loop:
 	for {
@@ -20,23 +22,22 @@ Loop:
 		case msg := <-rtm.IncomingEvents:
 			fmt.Print("Event Received: ")
 			switch ev := msg.Data.(type) {
-			case *slack.HelloEvent:
-				// Ignore hello
-
 			case *slack.ConnectedEvent:
-				fmt.Println("Infos:", ev.Info)
-				fmt.Println("Connection counter:", ev.ConnectionCount)
-				// Replace #general with your Channel ID
-				rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "#general"))
-
+				// fmt.Println("Infos:", ev.Info)
+				botMeta = ev.Info.User
+				_ = botMeta
+				// fmt.Println("Connection counter:", ev.ConnectionCount)
+				// rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "C0QJ2EWCT"))
 			case *slack.MessageEvent:
 				fmt.Printf("Message: %v\n", ev)
-
+				// if ev.Members = botMeta.ID {
+				// 	rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "C0QJ2EWCT"))
+				// }
 			case *slack.PresenceChangeEvent:
-				fmt.Printf("Presence Change: %v\n", ev)
+				// fmt.Printf("Presence Change: %v\n", ev)
 
 			case *slack.LatencyReport:
-				fmt.Printf("Current latency: %v\n", ev.Value)
+				// fmt.Printf("Current latency: %v\n", ev.Value)
 
 			case *slack.RTMError:
 				fmt.Printf("Error: %s\n", ev.Error())
