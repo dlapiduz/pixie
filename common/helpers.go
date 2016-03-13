@@ -1,10 +1,12 @@
-package main
+package common
 
 import (
 	"bytes"
 	"log"
 	"math/rand"
 	"os"
+
+	"github.com/nats-io/nats"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -32,4 +34,16 @@ func NewLogger() (*log.Logger, *os.File, error) {
 	logger.Println("Setting up logger")
 
 	return logger, f, nil
+}
+
+func CreateNatsConn(logger *log.Logger) *nats.EncodedConn {
+	nc, err := nats.Connect(os.Getenv("NATS_URL"))
+	if err != nil {
+		logger.Println("Error connecting to nats")
+		logger.Println(err)
+		return nil
+	}
+	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+
+	return ec
 }

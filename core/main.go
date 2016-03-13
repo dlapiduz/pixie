@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"log"
@@ -11,6 +10,7 @@ import (
 	c "github.com/dlapiduz/pixie/common"
 	"github.com/fsouza/go-dockerclient"
 	"github.com/jinzhu/gorm"
+	"github.com/nlopes/slack"
 )
 
 type Action struct {
@@ -30,16 +30,28 @@ func main() {
 	client, _ := docker.NewClientFromEnv()
 
 	var f *os.File
-	logger, f, _ = NewLogger()
+	logger, f, _ = c.NewLogger()
 	defer f.Close()
 
-	for {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter text: ")
-		text, _ := reader.ReadString('\n')
-		text = strings.TrimSpace(text)
+	// Create nats connection
+	ec := c.CreateNatsConn(logger)
+	defer ec.Close()
 
-		if action := RunFilter(db, text); action.ID > 0 {
+	if ec == nil {
+		return
+	}
+
+	recvCh := make(chan *slack.Msg)
+	ec.BindRecvChan("slack.receive", recvCh)
+
+	sendCh := make(chan string)
+	ec.BindSendChan("slack.send", sendCh)
+
+	fmt.Println("Listening nats")
+	for {
+		msg := <-recvCh
+
+		if action := RunFilter(db, msg.Text); action.ID > 0 {
 			logger.Printf("Running")
 			go func() {
 				out, err := RunContainer(client, action.Image)
@@ -47,12 +59,20 @@ func main() {
 					panic(err)
 				}
 
-				fmt.Println(out)
+				sendCh <- strings.TrimSpace(out)
 			}()
-
 		}
 
 	}
+	// for {
+	// 	reader := bufio.NewReader(os.Stdin)
+	// 	fmt.Print("Enter text: ")
+	// 	text, _ := reader.ReadString('\n')
+	// 	text = strings.TrimSpace(text)
+
+	// 	}
+
+	// }
 }
 
 func RunFilter(db *gorm.DB, text string) c.Action {
