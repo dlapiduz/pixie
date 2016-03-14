@@ -1,11 +1,11 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"os"
-	"strings"
 
 	c "github.com/dlapiduz/pixie/common"
 	"github.com/fsouza/go-dockerclient"
@@ -29,9 +29,8 @@ func main() {
 
 	client, _ := docker.NewClientFromEnv()
 
-	var f *os.File
-	logger, f, _ = c.NewLogger()
-	defer f.Close()
+	logger, _, _ = c.NewLogger("CORE")
+	// defer f.Close()
 
 	// Create nats connection
 	ec := c.CreateNatsConn(logger)
@@ -47,19 +46,19 @@ func main() {
 	sendCh := make(chan string)
 	ec.BindSendChan("slack.send", sendCh)
 
-	fmt.Println("Listening nats")
+	logger.Println("Listening nats")
 	for {
 		msg := <-recvCh
-
+		logger.Println("Received message")
 		if action := RunFilter(db, msg.Text); action.ID > 0 {
 			logger.Printf("Running")
 			go func() {
-				out, err := RunContainer(client, action.Image)
+				err := RunContainer(client, sendCh, action.Image)
 				if err != nil {
 					panic(err)
 				}
 
-				sendCh <- strings.TrimSpace(out)
+				logger.Printf("Sent")
 			}()
 		}
 
@@ -82,12 +81,12 @@ func RunFilter(db *gorm.DB, text string) c.Action {
 	}
 
 	db.Where("? ~ trigger", text).First(&action)
-	logger.Println(action)
+	// logger.Println(action)
 
 	return action
 }
 
-func RunContainer(c *docker.Client, img string) (string, error) {
+func RunContainer(c *docker.Client, sendCh chan string, img string) error {
 
 	opts := docker.CreateContainerOptions{
 		Config: &docker.Config{
@@ -105,39 +104,50 @@ func RunContainer(c *docker.Client, img string) (string, error) {
 
 	cont, err := c.CreateContainer(opts)
 	if err != nil {
-		return "", err
+		return err
 	}
 	logger.Println("Data Container ID: " + cont.ID)
 
 	attached := make(chan struct{})
 
-	buf := new(bytes.Buffer)
+	r, w := io.Pipe()
 
-	go func() {
-		logger.Printf("AttachToContainer")
-		err = c.AttachToContainer(docker.AttachToContainerOptions{
-			Container:    cont.ID,
-			OutputStream: buf,
-			ErrorStream:  os.Stderr,
-			Logs:         true,
-			Stdout:       true,
-			Stderr:       true,
-			Stream:       true,
-			Success:      attached,
-		})
-	}()
+	attachOptions := docker.AttachToContainerOptions{
+		Container:    cont.ID,
+		OutputStream: w,
+		ErrorStream:  w,
+		Logs:         true,
+		Stdout:       true,
+		Stderr:       true,
+		Stream:       true,
+		Success:      attached,
+	}
 
+	logger.Printf("AttachToContainer")
+	go c.AttachToContainer(attachOptions)
+
+	go func(reader io.Reader, sendCh chan string) {
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			sendCh <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, "There was an error with the scanner in attached container", err)
+		}
+	}(r, sendCh)
+
+	// Wait until
 	<-attached
 	attached <- struct{}{}
 
 	// start the container
 	if err := c.StartContainer(cont.ID, opts.HostConfig); err != nil {
-		return "", err
+		return err
 	}
 
 	logger.Println("Waiting for to exit so we can remove the container\n", cont.ID)
 	if _, err := c.WaitContainer(cont.ID); err != nil {
-		return "", err
+		return err
 	}
 
 	removeOpts := docker.RemoveContainerOptions{
@@ -146,8 +156,8 @@ func RunContainer(c *docker.Client, img string) (string, error) {
 
 	logger.Println("Removing container", cont.ID)
 	if err := c.RemoveContainer(removeOpts); err != nil {
-		return "", err
+		return err
 	}
 
-	return buf.String(), nil
+	return nil
 }

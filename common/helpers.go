@@ -19,12 +19,12 @@ func RandStr(n int) string {
 	return string(b)
 }
 
-func NewLogger() (*log.Logger, *os.File, error) {
+func NewLogger(prefix string) (*log.Logger, *os.File, error) {
 	var logbuf bytes.Buffer
 
-	logger := log.New(&logbuf, "", log.Ldate|log.Ltime|log.Lshortfile)
+	logger := log.New(&logbuf, "", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 
-	f, err := os.OpenFile("pixie.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile("../pixie.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 
 	if err != nil {
 		return nil, nil, err
@@ -32,6 +32,8 @@ func NewLogger() (*log.Logger, *os.File, error) {
 
 	logger.SetOutput(f)
 	logger.Println("Setting up logger")
+
+	logger.SetPrefix(prefix + ": ")
 
 	return logger, f, nil
 }

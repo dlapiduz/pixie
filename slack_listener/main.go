@@ -1,21 +1,24 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
+	c "github.com/dlapiduz/pixie/common"
 	"github.com/nats-io/nats"
 	"github.com/nlopes/slack"
 )
 
 func main() {
+	logger, f, _ := c.NewLogger("SLACK")
+	defer f.Close()
+
 	api := slack.New(os.Getenv("SLACK_API"))
 
 	nc, err := nats.Connect(os.Getenv("NATS_URL"))
 	if err != nil {
-		fmt.Println("Error connecting to nats")
-		fmt.Println(err)
+		logger.Println("Error connecting to nats")
+		logger.Println(err)
 		return
 	}
 	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
@@ -32,14 +35,16 @@ func main() {
 
 	var botMeta *slack.UserDetails
 	go func() {
-		fmt.Println("Listening nats")
+		logger.Println("Listening nats")
 		for {
 			msg := <-recvCh
-			rtm.SendMessage(rtm.NewOutgoingMessage(msg, "C0QJ2EWCT"))
+			logger.Println("Sending Message")
+			rtm.SendMessage(rtm.NewOutgoingMessage(strings.TrimSpace(msg), "C0QJ2EWCT"))
+			logger.Println("Message Sent")
 		}
 	}()
 
-	fmt.Println("Listening slack")
+	logger.Println("Listening slack")
 
 Loop:
 	for {
@@ -53,9 +58,11 @@ Loop:
 				// fmt.Println("Connection counter:", ev.ConnectionCount)
 				// rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "C0QJ2EWCT"))
 			case *slack.MessageEvent:
-
+				logger.Println("Received message")
 				if strings.Contains(ev.Msg.Text, botMeta.ID) {
+					logger.Println("Message matched")
 					sendCh <- &ev.Msg
+					logger.Println("Message sent")
 				}
 			case *slack.PresenceChangeEvent:
 				// fmt.Printf("Presence Change: %v\n", ev)
@@ -64,10 +71,10 @@ Loop:
 				// fmt.Printf("Current latency: %v\n", ev.Value)
 
 			case *slack.RTMError:
-				fmt.Printf("Error: %s\n", ev.Error())
+				logger.Println("Error: ", ev.Error())
 
 			case *slack.InvalidAuthEvent:
-				fmt.Printf("Invalid credentials")
+				logger.Println("Invalid credentials")
 				break Loop
 
 			default:
