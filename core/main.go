@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	c "github.com/dlapiduz/pixie/common"
 	"github.com/fsouza/go-dockerclient"
@@ -53,9 +54,11 @@ func main() {
 		if action := RunFilter(db, msg.Text); action.ID > 0 {
 			logger.Printf("Running")
 			go func() {
-				err := RunContainer(client, sendCh, action.Image)
+				args := strings.Split(strings.Trim(action.Match, "{}"), ",")
+				err := RunContainer(client, sendCh, action.Image, args)
 				if err != nil {
-					panic(err)
+					logger.Println("Error running container")
+					logger.Println(err)
 				}
 
 				logger.Printf("Sent")
@@ -80,13 +83,15 @@ func RunFilter(db *gorm.DB, text string) c.Action {
 		return action
 	}
 
-	db.Where("? ~ trigger", text).First(&action)
-	// logger.Println(action)
+	query := fmt.Sprintf("id, trigger, image, regexp_matches('%s', trigger) as match", text)
+
+	db.Select(query).Where("? ~ trigger", text).First(&action)
+	logger.Println(action)
 
 	return action
 }
 
-func RunContainer(c *docker.Client, sendCh chan string, img string) error {
+func RunContainer(client *docker.Client, sendCh chan string, img string, args []string) error {
 
 	opts := docker.CreateContainerOptions{
 		Config: &docker.Config{
@@ -94,18 +99,17 @@ func RunContainer(c *docker.Client, sendCh chan string, img string) error {
 			AttachStdout:    true,
 			AttachStderr:    true,
 			NetworkDisabled: false,
+			Cmd:             args,
 		},
-		// HostConfig: &docker.HostConfig{
-		// 	VolumesFrom: []string{volumesFrom},
-		// },
 	}
 
 	// opts.Config.Cmd = [""]
 
-	cont, err := c.CreateContainer(opts)
+	cont, err := client.CreateContainer(opts)
 	if err != nil {
 		return err
 	}
+
 	logger.Println("Data Container ID: " + cont.ID)
 
 	attached := make(chan struct{})
@@ -124,7 +128,7 @@ func RunContainer(c *docker.Client, sendCh chan string, img string) error {
 	}
 
 	logger.Printf("AttachToContainer")
-	go c.AttachToContainer(attachOptions)
+	go client.AttachToContainer(attachOptions)
 
 	go func(reader io.Reader, sendCh chan string) {
 		scanner := bufio.NewScanner(reader)
@@ -141,12 +145,12 @@ func RunContainer(c *docker.Client, sendCh chan string, img string) error {
 	attached <- struct{}{}
 
 	// start the container
-	if err := c.StartContainer(cont.ID, opts.HostConfig); err != nil {
+	if err := client.StartContainer(cont.ID, opts.HostConfig); err != nil {
 		return err
 	}
 
 	logger.Println("Waiting for to exit so we can remove the container\n", cont.ID)
-	if _, err := c.WaitContainer(cont.ID); err != nil {
+	if _, err := client.WaitContainer(cont.ID); err != nil {
 		return err
 	}
 
@@ -155,7 +159,7 @@ func RunContainer(c *docker.Client, sendCh chan string, img string) error {
 	}
 
 	logger.Println("Removing container", cont.ID)
-	if err := c.RemoveContainer(removeOpts); err != nil {
+	if err := client.RemoveContainer(removeOpts); err != nil {
 		return err
 	}
 
