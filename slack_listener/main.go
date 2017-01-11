@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	c "github.com/dlapiduz/pixie/common"
-	"github.com/nats-io/nats"
 	"github.com/nlopes/slack"
 )
 
@@ -15,20 +14,8 @@ func main() {
 
 	api := slack.New(os.Getenv("SLACK_API"))
 
-	nc, err := nats.Connect(os.Getenv("NATS_URL"))
-	if err != nil {
-		logger.Println("Error connecting to nats")
-		logger.Println(err)
-		return
-	}
-	ec, _ := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+	ec, recvCh, sendCh := c.ConnectNats()
 	defer ec.Close()
-
-	recvCh := make(chan string)
-	ec.BindRecvChan("slack.send", recvCh)
-
-	sendCh := make(chan *slack.Msg)
-	ec.BindSendChan("slack.receive", sendCh)
 
 	rtm := api.NewRTM()
 	go rtm.ManageConnection()

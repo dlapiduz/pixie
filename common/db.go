@@ -12,7 +12,7 @@ import (
 
 func LoadDB() (*gorm.DB, error) {
 	var err error
-	var db gorm.DB
+	var db *gorm.DB
 
 	if strings.Contains(os.Args[0], "test") {
 		// We are doing testing!
@@ -33,5 +33,5 @@ func LoadDB() (*gorm.DB, error) {
 
 	log.Println("Connected to DB...")
 	db.AutoMigrate(&Action{})
-	return &db, nil
+	return db, nil
 }

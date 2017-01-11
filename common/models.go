@@ -1,6 +1,8 @@
 package common
 
-import "time"
+import (
+	"time"
+)
 
 type Action struct {
 	ID int
@@ -9,7 +11,50 @@ type Action struct {
 	Image   string
 	EnvVars string
 
+	Match string `gorm:"-"`
+
+	AccountID int
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
+}
+
+type Account struct {
+	ID int
+
+	Name string
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+}
+
+type User struct {
+	ID int
+
+	Email string
+	Token string
+
+	AccountID int
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+}
+
+type Listener struct {
+	ID int
+
+	Class string
+
+	AccountID int
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt *time.Time
+}
+
+func (u *User) FindOrCreateFromToken(token string) {
+
 }
