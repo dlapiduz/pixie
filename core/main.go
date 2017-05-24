@@ -28,7 +28,6 @@ func main() {
 	client, _ := docker.NewClientFromEnv()
 
 	logger, _, _ = c.NewLogger("CORE")
-	// defer f.Close()
 
 	// Create nats connection
 	ec := c.CreateNatsConn(logger)
@@ -63,15 +62,7 @@ func main() {
 		}
 
 	}
-	// for {
-	// 	reader := bufio.NewReader(os.Stdin)
-	// 	fmt.Print("Enter text: ")
-	// 	text, _ := reader.ReadString('\n')
-	// 	text = strings.TrimSpace(text)
 
-	// 	}
-
-	// }
 }
 
 func RunFilter(db *gorm.DB, text string) c.Action {
